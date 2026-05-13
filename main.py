@@ -1,5 +1,5 @@
 import calculator
-import helpers2
+import helper
 
 print("starting app")
 
@@ -9,5 +9,5 @@ print("Hello " + x)
 result = calculator.add(5, 3)
 print("Result:", result)
 
-data = helpers2.getData()
+data = helper.getData()
 print("Data:", data)
