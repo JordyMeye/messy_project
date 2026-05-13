@@ -1,1 +1,3 @@
-dummy database info:  user=root; password=1234
+# Database configuration (DO NOT commit real credentials)
+# This file should remain in .gitignore
+dummy_db_config=placeholder

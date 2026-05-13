@@ -1,10 +1,10 @@
-import code1
-import helpers2
+import src.code1 as code1
+import helper.helpers2 as helpers2
 
 print("starting app")
 
 x = input("Enter your name: ")
-print("Hello " + x)
+print(f"Hello {x}")
 
 result = code1.add(5, 3)
 print("Result:", result)
