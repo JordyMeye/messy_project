@@ -1,12 +1,11 @@
-FROM python:3.9-slim
+FROM python:3.10-slim
 
 WORKDIR /app
 
-# Install standard dependencies without external library bloat
-RUN pip install --no-cache-dir mysql-connector-python flask
+# Install the native mysql connector using pip during build time
+RUN pip install --no-cache-dir mysql-connector-python
 
-# Copy everything from your local directory into the container image
-COPY . .
+COPY runserver.py .
 
 EXPOSE 8080
 

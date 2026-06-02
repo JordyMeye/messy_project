@@ -10,7 +10,8 @@ from typing import Optional, Dict, Any
 class DatabaseController:
     """Controller class to manage database connections and queries"""
     
-    def __init__(self, host: str = "172.17.0.2", user: str = "root", password: str = "admin"):
+    # UPDATED: Changed default host from "172.17.0.2" to "mysql-db"
+    def __init__(self, host: str = "mysql-db", user: str = "root", password: str = "admin"):
         """
         Initialize the database controller with connection parameters
         
@@ -59,7 +60,7 @@ class DatabaseController:
     
     def execute_query(self, query: str) -> Optional[Dict[str, Any]]:
         """
-        Execute a custom query on the database
+        Execute a custom query  on the database
         
         Args:
             query: SQL query to execute

@@ -1,0 +1,30 @@
+version: '3.8'
+
+services:
+  mysql-db:
+    image: mysql:latest
+    container_name: mysql-db
+    environment:
+      MYSQL_ROOT_PASSWORD: admin
+    volumes:
+      - mysql_data:/var/lib/mysql
+    networks:
+      - my-custom-bridge
+
+  webapp_v2:
+    build: .
+    container_name: webapp_v2
+    ports:
+      - "8081:8080"
+    depends_on:
+      - mysql-db
+    networks:
+      - my-custom-bridge
+
+volumes:
+  mysql_data:
+    driver: local
+
+networks:
+  my-custom-bridge:
+    driver: bridge

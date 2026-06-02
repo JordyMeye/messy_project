@@ -1,61 +1,158 @@
 """
-HTTP Server with Database Controller
-Serves a simple web application with database connectivity
+Database Controller & Web Server
+Handles all database connections, operations, and HTTP routing requests.
 """
 
-from http.server import BaseHTTPRequestHandler, HTTPServer
+import os
+import datetime
 import json
-from db_controller import DatabaseController
+from http.server import BaseHTTPRequestHandler, HTTPServer
+from typing import Optional, Dict, Any
+
+# Ensure external dependencies are cleanly resolved or handled gracefully
+try:
+    import mysql.connector
+except ImportError:
+    mysql.connector = None
 
 
-class SimpleServer(BaseHTTPRequestHandler):
-    """HTTP Request handler with database controller integration"""
+class DatabaseController:
+    """Controller class to manage database connections and queries"""
     
-    db_controller = DatabaseController()
+    def __init__(self, host: str = "mysql-db", user: str = "root", password: str = "admin"):
+        """
+        Initialize the database controller with connection parameters
+        
+        Args:
+            host: Database host IP/address
+            user: Database user
+            password: Database password
+        """
+        self.host = host
+        self.user = user
+        self.password = password
     
-    def _set_headers(self, status_code=200, content_type="text/html"):
-        """Set response headers"""
-        self.send_response(status_code)
-        self.send_header("Content-type", content_type)
-        self.end_headers()
+    def get_current_timestamp(self) -> Optional[Dict[str, Any]]:
+        """
+        Query the database for the current timestamp
+        
+        Returns:
+            Dictionary with status and timestamp or error message
+        """
+        if not mysql.connector:
+            return {
+                "status": "error",
+                "message": "mysql-connector-python package missing from container environment"
+            }
+            
+        try:
+            connection = mysql.connector.connect(
+                host=self.host,
+                user=self.user,
+                password=self.password
+            )
+            
+            cursor = connection.cursor()
+            cursor.execute("SELECT CURRENT_TIMESTAMP();")
+            result = cursor.fetchone()
+            
+            db_time = str(result[0])
+            
+            cursor.close()
+            connection.close()
+            
+            return {
+                "status": "success",
+                "mysql_time": db_time
+            }
+            
+        except Exception as e:
+            return {
+                "status": "error",
+                "message": str(e)
+            }
+    
+    def execute_query(self, query: str) -> Optional[Dict[str, Any]]:
+        """
+        Execute a custom query on the database
+        
+        Args:
+            query: SQL query to execute
+            
+        Returns:
+            Dictionary with status and results or error message
+        """
+        if not mysql.connector:
+            return {
+                "status": "error",
+                "message": "mysql-connector-python package missing from container environment"
+            }
+
+        try:
+            connection = mysql.connector.connect(
+                host=self.host,
+                user=self.user,
+                password=self.password
+            )
+            
+            cursor = connection.cursor()
+            cursor.execute(query)
+            result = cursor.fetchall()
+            
+            cursor.close()
+            connection.close()
+            
+            return {
+                "status": "success",
+                "results": [str(row) for row in result]
+            }
+            
+        except Exception as e:
+            return {
+                "status": "error",
+                "message": str(e)
+            }
+
+
+class TimeServiceHandler(BaseHTTPRequestHandler):
+    """HTTP Request Handler mapping application route responses"""
 
     def do_GET(self):
-        """Handle GET requests"""
-        # Base Route (Step 5 validation)
-        if self.path == "/":
-            self._set_headers()
-            html_content = """
-            <html>
-                <body>
-                    <h1>Web App Container Ready</h1>
-                    <p>Go to <a href="/time">/time</a> to query the database.</p>
-                </body>
-            </html>
-            """
-            self.wfile.write(bytes(html_content, "utf-8"))
+        if self.path == '/time':
+            current_filename = os.path.basename(__file__)
             
-        # Time Endpoint (Step 7)
-        elif self.path == "/time":
-            response_data = self.db_controller.get_current_timestamp()
+            # Instantiate the database controller mapping to the Docker Compose service DNS
+            db = DatabaseController(host="mysql-db", user="root", password="admin")
+            db_response = db.get_current_timestamp()
             
-            if response_data["status"] == "success":
-                self._set_headers(status_code=200, content_type="application/json")
+            if db_response["status"] == "success":
+                db_time = db_response["mysql_time"]
             else:
-                self._set_headers(status_code=500, content_type="application/json")
+                db_time = f"Error connecting to DB: {db_response['message']}"
+
+            # Formulate the structural response containing the requested string keys
+            response_data = {
+                "status": "success",
+                "message": f"look my time is : {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}",
+                "mysql_time": db_time,
+                "source_file": current_filename
+            }
             
-            self.wfile.write(bytes(json.dumps(response_data), "utf-8"))
+            self.send_response(200)
+            self.send_header('Content-Type', 'application/json')
+            self.end_headers()
+            self.wfile.write(json.dumps(response_data).encode('utf-8'))
         else:
-            self._set_headers(404)
-            self.wfile.write(bytes("404 Not Found", "utf-8"))
+            self.send_response(404)
+            self.end_headers()
 
 
-def run(server_class=HTTPServer, handler_class=SimpleServer, port=8080):
-    """Start the HTTP server"""
+def run(server_class=HTTPServer, handler_class=TimeServiceHandler, port=8080):
     server_address = ('', port)
     httpd = server_class(server_address, handler_class)
-    print(f"Server executing on port {port}...")
+    print(f"Starting application server on port {port}...")
     httpd.serve_forever()
 
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     run()
