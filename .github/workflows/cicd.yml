@@ -53,10 +53,6 @@ jobs:
             mkdir -p ~/app
             cd ~/app
             echo "TAG=${{ github.sha }}" > .env
-            
-            # Dynamically swap out the tags for both applications using sed
             sed -i "s|image: .*my-app:placeholder-v1|image: ${{ secrets.DOCKER_USERNAME }}/my-app:${{ github.sha }}|g" docker-compose.yml
-            sed -i "s|image: .*my-app:placeholder-v2|image: ${{ secrets.DOCKER_USERNAME }}/my-app:${{ github.sha }}|g" docker-compose.yml
-            
-            sudo docker compose pull
-            sudo docker compose up -d
+            sudo docker-compose pull
+            sudo docker-compose up -d
