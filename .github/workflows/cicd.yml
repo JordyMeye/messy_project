@@ -21,7 +21,7 @@ jobs:
         python -m pip install --upgrade pip
         pip install flake8
 
-    - name: Run linting
+    - name: Run linter
       run: |
         flake8 . --count --exit-zero --max-line-length=127 --statistics || true
 
@@ -60,22 +60,15 @@ jobs:
         username: ${{ secrets.VM_USER }}
         key: ${{ secrets.VM_SSH_KEY }}
         script: |
-          # Create app tracking directory if missing
           mkdir -p ~/app
-          
-          # Dynamically write docker-compose.yml using the unique commit SHA tag
-          cat << 'EOF' > ~/app/docker-compose.yml
-          version: '3.8'
-          services:
-            webapp:
-              image: ${{ secrets.DOCKER_USERNAME }}/my-app:${{ github.sha }}
-              container_name: webapp_v2
-              ports:
-                - "5000:8080"
-              restart: always
-          EOF
-          
-          # Move to workspace, pull the specific tagged image, and launch
+          echo "version: '3.8'" > ~/app/docker-compose.yml
+          echo "services:" >> ~/app/docker-compose.yml
+          echo "  webapp:" >> ~/app/docker-compose.yml
+          echo "    image: ${{ secrets.DOCKER_USERNAME }}/my-app:${{ github.sha }}" >> ~/app/docker-compose.yml
+          echo "    container_name: webapp_v2" >> ~/app/docker-compose.yml
+          echo "    ports:" >> ~/app/docker-compose.yml
+          echo "      - '5000:8080'" >> ~/app/docker-compose.yml
+          echo "    restart: always" >> ~/app/docker-compose.yml
           cd ~/app
           sudo docker compose pull
           sudo docker compose up -d
