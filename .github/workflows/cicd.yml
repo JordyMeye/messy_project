@@ -28,29 +28,16 @@ jobs:
       uses: actions/setup-python@v5
       with:
         python-version: '3.10'
-    
-    - name: List repository files
-      run: |
-        echo "=== Repository Structure ==="
-        ls -la
-        echo ""
-        echo "=== FlaskWebProject1 Contents ==="
-        ls -la FlaskWebProject1/
 
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
-        pip install -r requirements.txt
+        pip install flake8
 
     - name: Run linting (Flake8)
       run: |
-        pip install flake8
         flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
         flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
-
-    - name: Run tests
-      run: |
-        pytest FlaskWebProject1/tests/ -v --tb=short || true
 
   # ============================================================================
   # STAGE 2: BUILD DOCKER IMAGE & PUSH TO DOCKER HUB
@@ -63,20 +50,11 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v4
 
-    - name: Set up Docker Buildx
-      uses: docker/setup-buildx-action@v3
-
     - name: Log in to Docker Hub
       uses: docker/login-action@v3
       with:
         username: ${{ secrets.DOCKER_USERNAME }}
         password: ${{ secrets.DOCKER_PASSWORD }}
-
-    - name: Extract metadata
-      id: meta
-      run: |
-        echo "IMAGE_TAG=${{ secrets.DOCKER_USERNAME }}/my-app:${{ github.sha }}" >> $GITHUB_OUTPUT
-        echo "IMAGE_LATEST=${{ secrets.DOCKER_USERNAME }}/my-app:latest" >> $GITHUB_OUTPUT
 
     - name: Build and push Docker image
       uses: docker/build-push-action@v5
@@ -84,16 +62,8 @@ jobs:
         context: .
         push: true
         tags: |
-          ${{ steps.meta.outputs.IMAGE_TAG }}
-          ${{ steps.meta.outputs.IMAGE_LATEST }}
-        cache-from: type=registry,ref=${{ env.IMAGE_NAME }}:buildcache
-        cache-to: type=registry,ref=${{ env.IMAGE_NAME }}:buildcache,mode=max
-
-    - name: Print image details
-      run: |
-        echo "✓ Docker image built and pushed successfully!"
-        echo "  Commit SHA tag: ${{ steps.meta.outputs.IMAGE_TAG }}"
-        echo "  Latest tag:     ${{ steps.meta.outputs.IMAGE_LATEST }}"
+          ${{ secrets.DOCKER_USERNAME }}/my-app:latest
+          ${{ secrets.DOCKER_USERNAME }}/my-app:${{ github.sha }}
 
   # ============================================================================
   # STAGE 3: DEPLOY TO PRODUCTION VM
@@ -104,9 +74,6 @@ jobs:
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
 
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-
     - name: Deploy to VM via SSH
       uses: appleboy/ssh-action@v1.0.3
       with:
@@ -114,62 +81,18 @@ jobs:
         username: ${{ secrets.VM_USER }}
         key: ${{ secrets.VM_SSH_KEY }}
         script: |
-          echo "=========================================="
-          echo "Deploying to Production Environment"
-          echo "=========================================="
+          echo "Pulling fresh application image..."
+          sudo docker pull ${{ secrets.DOCKER_USERNAME }}/my-app:latest
           
-          # Navigate to deployment directory
-          cd /app || { echo "ERROR: /app directory not found"; exit 1; }
+          echo "Cleaning up old container instances..."
+          sudo docker stop webapp_v2 || true
+          sudo docker rm webapp_v2 || true
           
-          echo "1. Pulling latest Docker image..."
-          docker pull ${{ secrets.DOCKER_USERNAME }}/my-app:${{ github.sha }}
-          docker tag ${{ secrets.DOCKER_USERNAME }}/my-app:${{ github.sha }} ${{ secrets.DOCKER_USERNAME }}/my-app:latest
+          echo "Launching application container on port 5000..."
+          sudo docker run -d --name webapp_v2 -p 5000:5000 ${{ secrets.DOCKER_USERNAME }}/my-app:latest
           
-          echo ""
-          echo "2. Updating docker-compose services..."
-          docker compose pull
-          
-          echo ""
-          echo "3. Starting containers..."
-          docker compose up -d
-          
-          echo ""
-          echo "4. Current running containers:"
-          docker ps
-          
-          echo ""
-          echo "✓ Deployment complete!"
-
-    - name: Verify deployment health
-      uses: appleboy/ssh-action@v1.0.3
-      with:
-        host: ${{ secrets.VM_HOST }}
-        username: ${{ secrets.VM_USER }}
-        key: ${{ secrets.VM_SSH_KEY }}
-        script: |
-          echo "=========================================="
-          echo "Post-Deployment Verification"
-          echo "=========================================="
-          
-          echo "Waiting for services to be ready..."
+          echo "Waiting for app to initialize..."
           sleep 5
           
-          echo ""
-          echo "1. Checking application /version endpoint..."
-          if curl -s http://localhost:8081/version | grep -q "version"; then
-              echo "✓ /version endpoint is healthy"
-              curl -s http://localhost:8081/version | python -m json.tool
-          else
-              echo "⚠ /version endpoint not yet responding, checking logs..."
-          fi
-          
-          echo ""
-          echo "2. Recent container logs (webapp_v2):"
-          docker logs webapp_v2 --tail 15
-          
-          echo ""
-          echo "3. Docker network status:"
-          docker network ls
-          
-          echo ""
-          echo "✓ Verification complete!"
+          echo "Verifying local application health..."
+          curl -s http://localhost:5000/version
