@@ -3,7 +3,7 @@ Routes and views for the flask application.
 """
 
 from datetime import datetime
-from flask import render_template
+from flask import render_template, jsonify
 from FlaskWebProject1 import app
 
 @app.route('/')
@@ -35,3 +35,8 @@ def about():
         year=datetime.now().year,
         message='Your application description page.'
     )
+
+@app.route('/version')
+def version():
+    """Returns the application version."""
+    return jsonify({"version": "1.0"})
