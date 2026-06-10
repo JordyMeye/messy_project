@@ -38,5 +38,8 @@ def about():
 
 @app.route('/version')
 def version():
-    """Returns the application version."""
-    return jsonify({"version": "1.0"})
+    """Returns the load-balanced targeted instance identity tracking values."""
+    return jsonify({
+        "instance": "flask-app-1",
+        "version": "2.0"
+    })

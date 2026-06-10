@@ -1,74 +1,62 @@
-name: CI/CD Pipeline - Build and Deploy
+name: Build and Deploy Flask App to Azure Web App
 
 on:
   push:
-    branches: [ "main" ]
+    branches:
+      - main
+  workflow_dispatch:
 
 jobs:
   build:
     runs-on: ubuntu-latest
+
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-    
-    - name: Set up Python
-      uses: actions/setup-python@v5
-      with:
-        python-version: '3.10'
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-    - name: Install Linting Tools
-      run: |
-        python -m pip install --upgrade pip
-        pip install flake8
+      - name: Set up Python 3.10
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
 
-    - name: Run linter
-      run: |
-        flake8 . --count --exit-zero --max-line-length=127 --statistics || true
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
 
-  docker-build-push:
-    runs-on: ubuntu-latest
-    needs: build
-    steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
+      - name: Docker Login
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
 
-    - name: Log in to Docker Hub
-      uses: docker/login-action@v3
-      with:
-        username: ${{ secrets.DOCKER_USERNAME }}
-        password: ${{ secrets.DOCKER_PASSWORD }}
+      - name: Build Docker image
+        run: |
+          docker build -t ${{ secrets.DOCKER_USERNAME }}/my-app:${{ github.sha }} .
 
-    - name: Build and push Docker image
-      uses: docker/build-push-action@v5
-      with:
-        context: .
-        file: ./Dockerfile
-        push: true
-        tags: |
-          ${{ secrets.DOCKER_USERNAME }}/my-app:latest
-          ${{ secrets.DOCKER_USERNAME }}/my-app:${{ github.sha }}
+      - name: Push Docker image
+        run: |
+          docker push ${{ secrets.DOCKER_USERNAME }}/my-app:${{ github.sha }}
 
   deploy:
     runs-on: ubuntu-latest
-    needs: docker-build-push
+    needs: build
 
     steps:
-    - name: Deploy to VM via SSH
-      uses: appleboy/ssh-action@v1.0.3
-      with:
-        host: ${{ secrets.VM_HOST }}
-        username: ${{ secrets.VM_USER }}
-        key: ${{ secrets.VM_SSH_KEY }}
-        script: |
-          mkdir -p ~/app
-          echo "version: '3.8'" > ~/app/docker-compose.yml
-          echo "services:" >> ~/app/docker-compose.yml
-          echo "  webapp:" >> ~/app/docker-compose.yml
-          echo "    image: ${{ secrets.DOCKER_USERNAME }}/my-app:${{ github.sha }}" >> ~/app/docker-compose.yml
-          echo "    container_name: webapp_v2" >> ~/app/docker-compose.yml
-          echo "    ports:" >> ~/app/docker-compose.yml
-          echo "      - '5000:8080'" >> ~/app/docker-compose.yml
-          echo "    restart: always" >> ~/app/docker-compose.yml
-          cd ~/app
-          sudo docker compose pull
-          sudo docker compose up -d
+      - name: Deploy to Azure VM
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.VM_HOST }}
+          username: ${{ secrets.VM_USER }}
+          key: ${{ secrets.VM_SSH_KEY }}
+          script: |
+            mkdir -p ~/app
+            cd ~/app
+            echo "TAG=${{ github.sha }}" > .env
+            
+            # Dynamically swap out the tags for both applications using sed
+            sed -i "s|image: .*my-app:placeholder-v1|image: ${{ secrets.DOCKER_USERNAME }}/my-app:${{ github.sha }}|g" docker-compose.yml
+            sed -i "s|image: .*my-app:placeholder-v2|image: ${{ secrets.DOCKER_USERNAME }}/my-app:${{ github.sha }}|g" docker-compose.yml
+            
+            sudo docker compose pull
+            sudo docker compose up -d

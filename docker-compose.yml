@@ -1,30 +1,16 @@
 version: '3.8'
 
 services:
-  mysql-db:
-    image: mysql:latest
-    container_name: mysql-db
-    environment:
-      MYSQL_ROOT_PASSWORD: admin
-    volumes:
-      - mysql_data:/var/lib/mysql
-    networks:
-      - my-custom-bridge
-
-  webapp_v2:
-    image: jordymeye/my-app:placeholder
-    container_name: webapp_v2
+  flask-app-1:
+    image: jordymeye/my-app:placeholder-v1
+    container_name: flask-app-1
     ports:
-      - "5000:8080"
-    depends_on:
-      - mysql-db
-    networks:
-      - my-custom-bridge
+      - "8001:8080"
+    restart: always
 
-volumes:
-  mysql_data:
-    driver: local
-
-networks:
-  my-custom-bridge:
-    driver: bridge
+  flask-app-2:
+    image: jordymeye/my-app:placeholder-v2
+    container_name: flask-app-2
+    ports:
+      - "8002:8080"
+    restart: always
