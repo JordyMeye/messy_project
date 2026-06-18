@@ -41,5 +41,5 @@ def about():
 def version():
     return jsonify({
         "instance": os.environ.get("INSTANCE_NAME", "flask-app-1"),
-        "version": "1.0"
+        "version": "2.0"
     })
