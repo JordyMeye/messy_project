@@ -2,6 +2,7 @@
 Routes and views for the flask application.
 """
 
+import os
 from datetime import datetime
 from flask import render_template, jsonify
 from FlaskWebProject1 import app
@@ -38,8 +39,7 @@ def about():
 
 @app.route('/version')
 def version():
-    """Returns the load-balanced targeted instance identity tracking values."""
     return jsonify({
-        "instance": "flask-app-1",
-        "version": "2.0"
+        "instance": os.environ.get("INSTANCE_NAME", "flask-app-1"),
+        "version": "1.0"
     })

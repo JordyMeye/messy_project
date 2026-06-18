@@ -43,6 +43,26 @@ jobs:
     needs: build
 
     steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Create app directory on VM
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.VM_HOST }}
+          username: ${{ secrets.VM_USER }}
+          key: ${{ secrets.VM_SSH_KEY }}
+          script: mkdir -p ~/app
+
+      - name: Copy docker-compose.yml to VM
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.VM_HOST }}
+          username: ${{ secrets.VM_USER }}
+          key: ${{ secrets.VM_SSH_KEY }}
+          source: "docker-compose.yml"
+          target: "/home/azureuser/app/"
+
       - name: Deploy to Azure VM
         uses: appleboy/ssh-action@v1.0.3
         with:
@@ -50,9 +70,21 @@ jobs:
           username: ${{ secrets.VM_USER }}
           key: ${{ secrets.VM_SSH_KEY }}
           script: |
-            mkdir -p ~/app
             cd ~/app
-            echo "TAG=${{ github.sha }}" > .env
-            sed -i "s|image: .*my-app:placeholder-v1|image: ${{ secrets.DOCKER_USERNAME }}/my-app:${{ github.sha }}|g" docker-compose.yml
+
+            # Pin flask-app-2 to the first-ever deployed SHA so it never changes
+            if [ -f .app2-tag ]; then
+              V2_TAG=$(cat .app2-tag)
+            else
+              echo "${{ github.sha }}" > .app2-tag
+              V2_TAG="${{ github.sha }}"
+            fi
+
+            # Update only flask-app-1 to the new image built from this commit
+            sed -i "s|image: jordymeye/my-app:placeholder-v1|image: ${{ secrets.DOCKER_USERNAME }}/my-app:${{ github.sha }}|g" docker-compose.yml
+
+            # Restore flask-app-2 to its pinned version (unchanged across deploys)
+            sed -i "s|image: jordymeye/my-app:placeholder-v2|image: ${{ secrets.DOCKER_USERNAME }}/my-app:${V2_TAG}|g" docker-compose.yml
+
             sudo docker compose pull
             sudo docker compose up -d
